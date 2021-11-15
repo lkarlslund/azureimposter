@@ -9,13 +9,14 @@ type AzAuthInfo struct {
 
 var (
 	WellKnownClients = map[string]AzAuthInfo{
-		"PowerShell": {
-			ClientId:      "1b730954-1685-4b74-9bfd-dac224a7b894",
-			RedirectURI:   "urn:ietf:wg:oauth:2.0:oob",
-			DefaultScopes: []string{"https://graph"},
-
-			// DefaultScopes: []string{"scope=AuditLog.Read.All", "scope=Directory.AccessAsUser.All", "scope=Directory.ReadWrite.All", "scope=Group.ReadWrite.All"},
+		"Graph": {
+			ClientId:    "1b730954-1685-4b74-9bfd-dac224a7b894",
+			RedirectURI: "https://login.microsoftonline.com/common/oauth2/nativeclient",
+			// RedirectURI:   "urn:ietf:wg:oauth:2.0:oob",
+			DefaultScopes: []string{"https://graph.windows.net//.default"},
 		},
+
+		// Not at all tested below here
 		"Az": {
 			ClientId:      "1950a258-227b-4e31-a9cf-717495945fc2",
 			DefaultScopes: []string{"https://management.core.windows.net//.default openid profile offline_access"},

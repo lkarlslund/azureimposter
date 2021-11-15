@@ -2,6 +2,7 @@ package azureimposter
 
 import (
 	"context"
+	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -42,10 +43,12 @@ func GetToken(authority, clientID, redirectURI string, scopes []string) (*TokenR
 			redirectURI = srv.Addr
 		}
 		if srv.TLS {
-			extraargs = append(extraargs,
-				"--ignore-certificate-errors-spki-list",
-				mozcertificate.PKPSHA256Hash(srv.Cert.Leaf),
-			)
+			if c, e := x509.ParseCertificate(srv.Cert.Certificate[0]); e == nil {
+				extraargs = append(extraargs,
+					"--ignore-certificate-errors-spki-list",
+					mozcertificate.PKPSHA256Hash(c),
+				)
+			}
 		}
 
 		// Override results

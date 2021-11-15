@@ -65,7 +65,9 @@ func Serve(emulateurl string) (*Server, error) {
 					return nil, err
 				}
 				serv.Cert = cert
-				serv.s.TLSConfig.Certificates = []tls.Certificate{cert}
+				serv.s.TLSConfig = &tls.Config{
+					Certificates: []tls.Certificate{cert},
+				}
 				serv.TLS = true
 			} else {
 				return nil, errors.New("Unknown scheme " + u.Scheme)
