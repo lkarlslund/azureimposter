@@ -9,7 +9,7 @@ import (
 )
 
 func main() {
-	wkc := flag.String("wkc", "Az", "Use a predefined well known client name")
+	wkc := flag.String("wkc", "Graph", "Use a predefined well known client name")
 
 	authority := flag.String("authority", "https://login.windows.net/common/", "OAuth authority request URL")
 	clientIDoverride := flag.String("clientID", "", "clientID to use")
@@ -45,5 +45,6 @@ func main() {
 		fmt.Println("Problem getting token:", err)
 	}
 
-	fmt.Println(token)
+	fmt.Println("Access token:")
+	fmt.Println(token.AccessToken)
 }
