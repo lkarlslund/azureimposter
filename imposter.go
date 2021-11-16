@@ -186,8 +186,8 @@ func RefreshToken(clientid, refreshtoken string, scope string) (*TokenResult, er
 type TokenResult struct {
 	TokenType    string `json:"token_type"`
 	Scope        string `json:"scope"`
-	ExpiresIn    string `json:"expires_in"`
-	ExtExpiresIn string `json:"ext_expires_in"`
+	ExpiresIn    int    `json:"expires_in"`
+	ExtExpiresIn int    `json:"ext_expires_in"`
 	ExpiresOn    string `json:"expires_on"`
 	NotBefore    string `json:"not_before"`
 	Resource     string `json:"resource"`
