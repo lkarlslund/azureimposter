@@ -3,7 +3,6 @@ package main
 import (
 	"flag"
 	"fmt"
-	"strings"
 
 	"github.com/lkarlslund/azureimposter"
 )
@@ -14,13 +13,13 @@ func main() {
 	authority := flag.String("authority", "https://login.windows.net/common/", "OAuth authority request URL")
 	clientIDoverride := flag.String("clientID", "", "clientID to use")
 	redirectURIorverride := flag.String("redirectURI", "", "redirectURI to use")
-	scopesOverride := flag.String("scopes", "", "comma list separated list of scopes to request")
+	scopeOverride := flag.String("scopes", "", "scope to request")
 
 	pretender := azureimposter.WellKnownClients[*wkc]
 
 	clientID := pretender.ClientId
 	redirectURI := pretender.RedirectURI
-	scopes := pretender.DefaultScopes
+	scope := pretender.Scope
 
 	if *clientIDoverride != "" {
 		clientID = *clientIDoverride
@@ -30,15 +29,15 @@ func main() {
 		redirectURI = *redirectURIorverride
 	}
 
-	if *scopesOverride != "" {
-		scopes = strings.Split(*scopesOverride, ",")
+	if *scopeOverride != "" {
+		scope = *scopeOverride
 	}
 
 	token, err := azureimposter.GetToken(
 		*authority,
 		clientID,
 		redirectURI,
-		scopes,
+		scope,
 	)
 
 	if err != nil {

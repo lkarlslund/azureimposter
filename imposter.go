@@ -16,7 +16,7 @@ import (
 	mozcertificate "github.com/mozilla/tls-observatory/certificate"
 )
 
-func GetToken(authority, clientID, redirectURI string, scopes []string) (*TokenResult, error) {
+func GetToken(authority, clientID, redirectURI string, scope string) (*TokenResult, error) {
 	var extraargs []string
 
 	resultchan := make(chan Result)
@@ -62,38 +62,10 @@ func GetToken(authority, clientID, redirectURI string, scopes []string) (*TokenR
 
 	// Get the URL for interactive login
 	ctx := context.Background()
-	loginurl, err := c.CreateAuthCodeURL(ctx, clientID, redirectURI, scopes)
+	loginurl, err := c.CreateAuthCodeURL(ctx, clientID, redirectURI, []string{scope})
 	if err != nil {
 		return nil, err
 	}
-
-	// lorca.DefaultChromeArgs = []string{
-	// 	"--disable-background-networking",
-	// 	"--disable-background-timer-throttling",
-	// 	"--disable-backgrounding-occluded-windows",
-	// 	"--disable-breakpad",
-	// 	"--disable-client-side-phishing-detection",
-	// 	// "--disable-default-apps",
-	// 	// "--disable-dev-shm-usage",
-	// 	// "--disable-infobars",
-	// 	// "--disable-extensions",
-	// 	"--disable-features=site-per-process",
-	// 	"--disable-hang-monitor",
-	// 	"--disable-ipc-flooding-protection",
-	// 	"--disable-popup-blocking",
-	// 	// "--disable-prompt-on-repost",
-	// 	"--disable-renderer-backgrounding",
-	// 	// "--disable-sync",
-	// 	"--disable-translate",
-	// 	"--disable-windows10-custom-titlebar",
-	// 	"--metrics-recording-only",
-	// 	"--no-first-run",
-	// 	"--no-default-browser-check",
-	// 	"--safebrowsing-disable-auto-update",
-	// 	"--enable-automation",
-	// 	"--password-store=basic",
-	// 	"--use-mock-keychain",
-	// }
 
 	// Launch browser
 	l, err := lorca.New("", "", 400, 600, extraargs...)
@@ -166,26 +138,49 @@ console.log = function(){
 	}
 	code := u.Query().Get("code")
 	if code != "" {
-
-		client := resty.New()
-		resp, err := client.R().
-			SetFormData(map[string]string{
-				"client_id":    clientID,
-				"grant_type":   "authorization_code",
-				"code":         code,
-				"redirect_uri": redirectURI,
-			}).
-			SetHeader("Content-Type", "application/x-www-form-urlencoded").
-			Post("https://login.microsoftonline.com/common/oauth2/token")
-		if err != nil {
-			return nil, err
-		}
-
-		var result TokenResult
-		err = json.Unmarshal([]byte(resp.String()), &result)
-		return &result, err
+		return RequestToken(clientID, code, redirectURI)
 	}
 	return nil, errors.New("No code returned, can't get token")
+}
+
+func RequestToken(clientid, code, redirecturi string) (*TokenResult, error) {
+	client := resty.New()
+	resp, err := client.R().
+		SetFormData(map[string]string{
+			"client_id":    clientid,
+			"grant_type":   "authorization_code",
+			"code":         code,
+			"redirect_uri": redirecturi,
+		}).
+		SetHeader("Content-Type", "application/x-www-form-urlencoded").
+		Post("https://login.microsoftonline.com/common/oauth2/token")
+	if err != nil {
+		return nil, err
+	}
+
+	var result TokenResult
+	err = json.Unmarshal([]byte(resp.String()), &result)
+	return &result, err
+}
+
+func RefreshToken(clientid, refreshtoken string, scope string) (*TokenResult, error) {
+	client := resty.New()
+	resp, err := client.R().
+		SetFormData(map[string]string{
+			"client_id":     clientid,
+			"grant_type":    "refresh_token",
+			"refresh_token": refreshtoken,
+			"scope":         scope,
+		}).
+		SetHeader("Content-Type", "application/x-www-form-urlencoded").
+		Post("https://login.microsoftonline.com/common/oauth2/v2.0/token")
+	if err != nil {
+		return nil, err
+	}
+
+	var result TokenResult
+	err = json.Unmarshal([]byte(resp.String()), &result)
+	return &result, err
 }
 
 type TokenResult struct {

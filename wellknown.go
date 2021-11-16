@@ -1,10 +1,10 @@
 package azureimposter
 
 type AzAuthInfo struct {
-	ClientId      string
-	RedirectURI   string
-	DefaultScopes []string
-	OtherParams   map[string]string
+	ClientId    string
+	RedirectURI string
+	Scope       string
+	OtherParams map[string]string
 }
 
 var (
@@ -13,13 +13,13 @@ var (
 			ClientId:    "1b730954-1685-4b74-9bfd-dac224a7b894",
 			RedirectURI: "https://login.microsoftonline.com/common/oauth2/nativeclient",
 			// RedirectURI:   "urn:ietf:wg:oauth:2.0:oob",
-			DefaultScopes: []string{"https://graph.windows.net//.default"},
+			Scope: "https://graph.windows.net//.default",
 		},
 
 		// Not at all tested below here
 		"Az": {
-			ClientId:      "1950a258-227b-4e31-a9cf-717495945fc2",
-			DefaultScopes: []string{"https://management.core.windows.net//.default openid profile offline_access"},
+			ClientId: "1950a258-227b-4e31-a9cf-717495945fc2",
+			Scope:    "https://management.core.windows.net//.default openid profile offline_access",
 		},
 		"Teams": {
 			ClientId:    "1fec8e78-bce4-4aaf-ab1b-5451cc387264",
@@ -34,9 +34,9 @@ var (
 			RedirectURI: "https://portal.azure.com/signin/index/?feature.prefetchtokens=true&feature.showservicehealthalerts=true&feature.usemsallogin=true",
 		},
 		"AzureAD": {
-			ClientId:      "0000000c-0000-0000-c000-000000000000",
-			RedirectURI:   "https://account.activedirectory.windowsazure.com/",
-			DefaultScopes: []string{"https://graph.windows.net//user_impersonation"},
+			ClientId:    "0000000c-0000-0000-c000-000000000000",
+			RedirectURI: "https://account.activedirectory.windowsazure.com/",
+			Scope:       "https://graph.windows.net//user_impersonation",
 		},
 		"MySignIns": {
 			ClientId:    "19db86c3-b2b9-44cc-b339-36da233a3be2",
@@ -63,9 +63,9 @@ var (
 			RedirectURI: "http://localhost/m365/commerce",
 		},
 		"Office": {
-			ClientId:      "d3590ed6-52b3-4102-aeff-aad2292ab01c",
-			RedirectURI:   "urn:ietf:wg:oauth:2.0:oob",
-			DefaultScopes: []string{"https://management.core.windows.net//user_impersonation"},
+			ClientId:    "d3590ed6-52b3-4102-aeff-aad2292ab01c",
+			RedirectURI: "urn:ietf:wg:oauth:2.0:oob",
+			Scope:       "https://management.core.windows.net//user_impersonation",
 		},
 	}
 )
