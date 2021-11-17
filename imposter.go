@@ -184,15 +184,15 @@ func RefreshToken(clientid, refreshtoken string, scope string) (*TokenResult, er
 }
 
 type TokenResult struct {
-	TokenType    string `json:"token_type"`
-	Scope        string `json:"scope"`
-	ExpiresIn    int    `json:"expires_in"`
-	ExtExpiresIn int    `json:"ext_expires_in"`
-	ExpiresOn    string `json:"expires_on"`
-	NotBefore    string `json:"not_before"`
-	Resource     string `json:"resource"`
-	AccessToken  string `json:"access_token"`
-	RefreshToken string `json:"refresh_token"`
-	Foci         string `json:"foci"`
-	IdToken      string `json:"id_token"`
+	TokenType    string      `json:"token_type"`
+	Scope        string      `json:"scope"`
+	ExpiresIn    interface{} `json:"expires_in"`
+	ExtExpiresIn interface{} `json:"ext_expires_in"`
+	ExpiresOn    string      `json:"expires_on"`
+	NotBefore    string      `json:"not_before"`
+	Resource     string      `json:"resource"`
+	AccessToken  string      `json:"access_token"`
+	RefreshToken string      `json:"refresh_token"`
+	Foci         string      `json:"foci"`
+	IdToken      string      `json:"id_token"`
 }
