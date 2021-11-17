@@ -1,6 +1,7 @@
 package azureimposter
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"time"
@@ -70,6 +71,24 @@ func (a *Client) R() *AzureRequest {
 	}
 }
 
+func (ar *AzureRequest) GetData(onData func(data []byte) error) error {
+	res, err := ar.Send()
+	if err != nil {
+		// Handle token refresh here
+		return err
+	}
+
+	// Was there an error?
+	if gjson.GetBytes(res.Body(), "error").Exists() {
+		return fmt.Errorf("Problem getting %v: %w", ar.URL, errors.New(gjson.GetBytes(res.Body(), "error.code").String()))
+	}
+
+	body := res.Body()
+
+	err = onData([]byte(body))
+	return err
+}
+
 func (ar *AzureRequest) GetChunkedData(onChunk func(data []byte) error) error {
 	res, err := ar.Send()
 	if err != nil {
@@ -77,28 +96,31 @@ func (ar *AzureRequest) GetChunkedData(onChunk func(data []byte) error) error {
 		return err
 	}
 
-	for err == nil && !gjson.GetBytes(res.Body(), "error").Exists() {
+	for {
+		// Was there an error?
+		if gjson.GetBytes(res.Body(), "error").Exists() {
+			return fmt.Errorf("Problem getting %v: %w", ar.URL, errors.New(gjson.GetBytes(res.Body(), "error.code").String()))
+		}
+
 		body := res.Body()
 
 		// debug
 		// fmt.Println(gjson.GetBytes(body, "value").Raw)
-
-		err = onChunk([]byte(gjson.GetBytes(body, "value").Raw))
-		if err != nil {
-			return err
+		value := gjson.GetBytes(body, "value")
+		if value.Exists() {
+			err = onChunk([]byte(value.Raw))
+			if err != nil {
+				return err
+			}
+		} else {
+			return fmt.Errorf("No value in Azure response: %v", string(body))
 		}
-
 		if nextlink := gjson.GetBytes(body, "@odata\\.nextLink").String(); nextlink != "" {
 			req := ar.client.R()
 			res, err = req.Get(nextlink)
 		} else {
 			break
 		}
-	}
-
-	// Was there an error?
-	if gjson.GetBytes(res.Body(), "error").Exists() {
-		return fmt.Errorf("Problem getting %v: %v", ar.URL, gjson.GetBytes(res.Body(), "error"))
 	}
 
 	return nil
@@ -122,7 +144,12 @@ func (ar *AzureRequest) BatchChunkData(requests []BatchRequest, onRequest func(d
 		Responses []BatchResponse `json:"responses"`
 	}
 
-	for err == nil && !gjson.GetBytes(res.Body(), "error").Exists() {
+	for {
+		// Was there an error?
+		if gjson.GetBytes(res.Body(), "error").Exists() {
+			return fmt.Errorf("Problem getting %v: %w", ar.URL, errors.New(gjson.GetBytes(res.Body(), "error.code").String()))
+		}
+
 		body := res.Body()
 
 		err = onRequest([]byte(gjson.GetBytes(body, "value").Raw))
@@ -136,11 +163,6 @@ func (ar *AzureRequest) BatchChunkData(requests []BatchRequest, onRequest func(d
 		} else {
 			break
 		}
-	}
-
-	// Was there an error?
-	if gjson.GetBytes(res.Body(), "error").Exists() {
-		return fmt.Errorf("Problem getting %v: %v", ar.URL, string(res.Body()))
 	}
 
 	return nil
