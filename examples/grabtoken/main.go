@@ -33,10 +33,10 @@ func main() {
 		scope = *scopeOverride
 	}
 
-	token, err := azureimposter.GetToken(
+	token, err := azureimposter.AcquireToken(
 		*authority,
-		clientID,
 		redirectURI,
+		clientID,
 		scope,
 	)
 

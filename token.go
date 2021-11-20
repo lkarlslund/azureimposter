@@ -11,18 +11,32 @@ import (
 
 	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
 	"github.com/go-resty/resty/v2"
+	"github.com/golang-jwt/jwt"
 	"github.com/lkarlslund/lorca"
 	"github.com/lkarlslund/stringsplus"
 	mozcertificate "github.com/mozilla/tls-observatory/certificate"
+	"github.com/tidwall/gjson"
 )
 
-func GetToken(authority, clientID, redirectURI string, scope string) (*TokenResult, error) {
+type Token struct {
+	AccessToken  string `json:"access_token"`
+	RefreshToken string `json:"refresh_token"`
+	ClientID     string `json:"client_id"`
+	Scope        string `json:"scope"`
+}
+
+func AcquireToken(authority, redirecturi, clientid, scope string) (*Token, error) {
+	t := &Token{
+		ClientID: clientid,
+		Scope:    scope,
+	}
+
 	var extraargs []string
 
 	resultchan := make(chan Result)
 	var interceptlogs bool
-	if stringsplus.EqualFoldHasPrefix(redirectURI, "http") {
-		u, err := url.Parse(redirectURI)
+	if stringsplus.EqualFoldHasPrefix(redirecturi, "http") {
+		u, err := url.Parse(redirecturi)
 		if err == nil {
 			// Try to subvert the final redirect to our own server
 			extraargs = append(extraargs,
@@ -31,16 +45,16 @@ func GetToken(authority, clientID, redirectURI string, scope string) (*TokenResu
 			)
 		}
 	}
-	if stringsplus.EqualFoldHasPrefix(redirectURI, "urn:ietf:wg:oauth:2.0:oob") {
+	if stringsplus.EqualFoldHasPrefix(redirecturi, "urn:ietf:wg:oauth:2.0:oob") {
 		// TODO Figure out this one :-)
 		interceptlogs = true
 	} else {
-		srv, err := Serve(redirectURI)
+		srv, err := Serve(redirecturi)
 		if err != nil {
 			return nil, err
 		}
-		if redirectURI == "" {
-			redirectURI = srv.Addr
+		if redirecturi == "" {
+			redirecturi = srv.Addr
 		}
 		if srv.TLS {
 			if c, e := x509.ParseCertificate(srv.Cert.Certificate[0]); e == nil {
@@ -55,14 +69,14 @@ func GetToken(authority, clientID, redirectURI string, scope string) (*TokenResu
 		resultchan = srv.ResultCh
 	}
 
-	c, err := public.New(clientID, public.WithAuthority(authority))
+	c, err := public.New(clientid, public.WithAuthority(authority))
 	if err != nil {
 		return nil, err
 	}
 
 	// Get the URL for interactive login
 	ctx := context.Background()
-	loginurl, err := c.CreateAuthCodeURL(ctx, clientID, redirectURI, []string{scope})
+	loginurl, err := c.CreateAuthCodeURL(ctx, clientid, redirecturi, []string{scope})
 	if err != nil {
 		return nil, err
 	}
@@ -100,7 +114,6 @@ console.log = function(){
 				l.Close()
 				break loop
 			case <-ticker.C:
-				// val := l.Eval("document.title")
 				// title := val.String()
 				// if strings.Contains(title, "code=") {
 				// 	fmt.Println(title)
@@ -116,9 +129,9 @@ console.log = function(){
 				// 	fmt.Println(title)
 				// }
 
-				if redirectURI != "" {
+				if redirecturi != "" {
 					currenturl := l.Eval("document.URL").String()
-					if stringsplus.EqualFoldHasPrefix(currenturl, redirectURI) {
+					if stringsplus.EqualFoldHasPrefix(currenturl, redirecturi) {
 						// We got it ... let's GO GO GO
 						resulturl = currenturl
 						l.Close()
@@ -136,18 +149,24 @@ console.log = function(){
 	if err != nil {
 		return nil, err
 	}
+
 	code := u.Query().Get("code")
 	if code != "" {
-		return RequestToken(clientID, code, redirectURI)
+		tr, err := t.upgradeCodeToToken(code, redirecturi)
+		if err == nil {
+			t.AccessToken = tr.AccessToken
+			t.RefreshToken = tr.RefreshToken
+		}
+		return t, err
 	}
 	return nil, errors.New("No code returned, can't get token")
 }
 
-func RequestToken(clientid, code, redirecturi string) (*TokenResult, error) {
+func (t *Token) upgradeCodeToToken(code, redirecturi string) (*TokenResult, error) {
 	client := resty.New()
 	resp, err := client.R().
 		SetFormData(map[string]string{
-			"client_id":    clientid,
+			"client_id":    t.ClientID,
 			"grant_type":   "authorization_code",
 			"code":         code,
 			"redirect_uri": redirecturi,
@@ -163,24 +182,69 @@ func RequestToken(clientid, code, redirecturi string) (*TokenResult, error) {
 	return &result, err
 }
 
-func RefreshToken(clientid, refreshtoken string, scope string) (*TokenResult, error) {
+func (t *Token) Parse() (*jwt.Token, *AzClaims, error) {
+	var jwtparser jwt.Parser
+	jtoken, _, err := jwtparser.ParseUnverified(string(t.AccessToken), &AzClaims{})
+	return jtoken, jtoken.Claims.(*AzClaims), err
+}
+
+func (t *Token) IsValid() bool {
+	jtoken, _, err := t.Parse()
+	if err != nil {
+		return false
+	}
+	return jtoken.Claims.Valid() == nil
+}
+
+func (t *Token) Refresh() error {
 	client := resty.New()
 	resp, err := client.R().
 		SetFormData(map[string]string{
-			"client_id":     clientid,
+			"client_id":     t.ClientID,
 			"grant_type":    "refresh_token",
-			"refresh_token": refreshtoken,
-			"scope":         scope,
+			"refresh_token": t.RefreshToken,
+			"scope":         t.Scope,
 		}).
 		SetHeader("Content-Type", "application/x-www-form-urlencoded").
 		Post("https://login.microsoftonline.com/common/oauth2/v2.0/token")
 	if err != nil {
-		return nil, err
+		return err
+	}
+
+	error := gjson.Get(resp.String(), "error")
+	if error.Exists() {
+		return fmt.Errorf("Problem %w refreshing token: %v", errors.New(error.String()), gjson.Get(resp.String(), "error_description"))
 	}
 
 	var result TokenResult
 	err = json.Unmarshal([]byte(resp.String()), &result)
-	return &result, err
+	if err == nil {
+		t.AccessToken = result.AccessToken
+		t.RefreshToken = result.RefreshToken
+	}
+	return err
+}
+
+// Tries to use the refreshtoken to act as another client under another scope
+func (t *Token) MigrateScope(clientid, scope string) (*Token, error) {
+	nt := &Token{
+		ClientID:     clientid,
+		Scope:        scope,
+		RefreshToken: t.RefreshToken,
+	}
+	err := nt.Refresh()
+	return nt, err
+}
+
+type AzClaims struct {
+	ClientID                     string   `json:"appid"`
+	TenantID                     string   `json:"tid"`
+	AuthenticationMethods        []string `json:"amr"`
+	ObjectID                     string   `json:"oid"`
+	OnPremisesSecurityIdentifier string   `json:"omprem_sid"`
+	Name                         string   `json:"name"`
+	TenantRegionScope            string   `json:"tenant_region_scope"`
+	jwt.StandardClaims
 }
 
 type TokenResult struct {

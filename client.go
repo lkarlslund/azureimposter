@@ -11,9 +11,9 @@ import (
 )
 
 type Client struct {
-	auth Authorization
+	token Token
 	*resty.Client
-	OnTokenRefresh func(Authorization)
+	OnTokenRefresh func(Token)
 }
 
 type AzureRequest struct {
@@ -21,9 +21,9 @@ type AzureRequest struct {
 	*resty.Request
 }
 
-func NewClient(auth Authorization) *Client {
+func NewClient(token Token) *Client {
 	client := &Client{
-		auth:   auth,
+		token:  token,
 		Client: resty.New(),
 	}
 
@@ -35,14 +35,12 @@ func NewClient(auth Authorization) *Client {
 		}
 		if gjson.GetBytes(resp.Body(), "error").Exists() && gjson.GetBytes(resp.Body(), "error.code").String() == "InvalidAuthenticationToken" {
 			// Token expired, refresh
-			result, err := RefreshToken(client.auth.ClientID, client.auth.RefreshToken, client.auth.Scope)
+			err := client.token.Refresh()
 			if err == nil {
-				client.auth.Token = result.AccessToken         // Update client token
-				client.auth.RefreshToken = result.RefreshToken // Update refresh token
-				client.SetAuthToken(client.auth.Token)         // For the next requests
-				resp.Request.SetAuthToken(client.auth.Token)   // For this request
+				client.SetAuthToken(client.token.AccessToken)       // For the next requests
+				resp.Request.SetAuthToken(client.token.AccessToken) // For this request
 				if client.OnTokenRefresh != nil {
-					client.OnTokenRefresh(client.auth)
+					client.OnTokenRefresh(client.token)
 				}
 				return true
 			}
@@ -60,7 +58,7 @@ func NewClient(auth Authorization) *Client {
 		}
 		return 0, nil
 	}
-	client.SetAuthToken(client.auth.Token)
+	client.SetAuthToken(client.token.AccessToken)
 	return client
 }
 
@@ -70,8 +68,16 @@ func (a *Client) R() *AzureRequest {
 		client:  a,
 	}
 }
+func (ar *AzureRequest) autoRefreshToken() error {
+	if !ar.client.token.IsValid() {
+		return ar.client.token.Refresh()
+	}
+	return nil
+}
 
 func (ar *AzureRequest) GetData(onData func(data []byte) error) error {
+	ar.autoRefreshToken()
+
 	res, err := ar.Send()
 	if err != nil {
 		// Handle token refresh here
@@ -90,6 +96,8 @@ func (ar *AzureRequest) GetData(onData func(data []byte) error) error {
 }
 
 func (ar *AzureRequest) GetChunkedData(onChunk func(data []byte) error) error {
+	ar.autoRefreshToken()
+
 	res, err := ar.Send()
 	if err != nil {
 		// Handle token refresh here
@@ -127,6 +135,8 @@ func (ar *AzureRequest) GetChunkedData(onChunk func(data []byte) error) error {
 }
 
 func (ar *AzureRequest) BatchChunkData(requests []BatchRequest, onRequest func(data []byte) error) error {
+	ar.autoRefreshToken()
+
 	ar.Header.Add("Accept", "application/json")
 	ar.Header.Add("Content-Type", "application/json")
 	type wrapper struct {

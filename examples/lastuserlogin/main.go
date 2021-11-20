@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/lkarlslund/azureimposter"
+	"github.com/lkarlslund/azureimposter/api/msgraphbeta"
 )
 
 type AzureUser struct {
@@ -37,10 +38,10 @@ func main() {
 
 	graphinfo := azureimposter.WellKnownClients["Graph"]
 
-	result, err := azureimposter.GetToken(
+	token, err := azureimposter.AcquireToken(
 		*authority,
-		graphinfo.ClientId,
 		graphinfo.RedirectURI,
+		graphinfo.ClientId,
 		"https://graph.microsoft.com//.default",
 	)
 
@@ -49,22 +50,17 @@ func main() {
 		os.Exit(1)
 	}
 
-	client := azureimposter.NewClient(azureimposter.Authorization{
-		ClientID:     graphinfo.ClientId,
-		Scope:        "https://graph.microsoft.com//.default",
-		Token:        result.AccessToken,
-		RefreshToken: result.RefreshToken,
-	})
+	client := azureimposter.NewClient(*token)
 
 	req := client.R()
 	req.SetQueryParam("$select", "id,displayName,mail,onPremisesDistinguishedName,onPremisesDomainName,onPremisesImmutableId,onPremisesLastSyncDateTime,onPremisesSamAccountName,onPremisesSecurityIdentifier,onPremisesSyncEnabled,onPremisesUserPrincipalName,signInActivity")
 	req.Method = "GET"
 	req.URL = "https://graph.microsoft.com/beta/users"
 
-	var users []AzureUser
+	var users []msgraphbeta.MicrosoftGraphUser
 
 	if err = req.GetChunkedData(func(data []byte) error {
-		var userchunk []AzureUser
+		var userchunk []msgraphbeta.MicrosoftGraphUser
 		err = json.Unmarshal(data, &userchunk)
 		if err != nil {
 			return err
