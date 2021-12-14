@@ -13,7 +13,7 @@ var (
 			ClientId:    "1b730954-1685-4b74-9bfd-dac224a7b894",
 			RedirectURI: "https://login.microsoftonline.com/common/oauth2/nativeclient",
 			// RedirectURI:   "urn:ietf:wg:oauth:2.0:oob",
-			Scope: "https://graph.windows.net//.default",
+			Scope: "https://graph.microsoft.com//.default",
 		},
 
 		// Not at all tested below here
