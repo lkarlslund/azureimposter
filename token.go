@@ -1,16 +1,16 @@
 package azureimposter
 
 import (
-	"context"
 	"crypto/x509"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
-	"github.com/AzureAD/microsoft-authentication-library-for-go/apps/public"
 	"github.com/go-resty/resty/v2"
+	"github.com/gofrs/uuid"
 	"github.com/golang-jwt/jwt"
 	"github.com/lkarlslund/lorca"
 	"github.com/lkarlslund/stringsplus"
@@ -22,16 +22,20 @@ type Token struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
 	ClientID     string `json:"client_id"`
-	Scope        string `json:"scope"`
+	Scope        string `json:"scope,omitempty"`
+	Resource     string `json:"resource,omitempty"`
 }
 
-func AcquireToken(authority, redirecturi, clientid, scope string) (*Token, error) {
+func AcquireToken(authority string, authinfo AzAuthInfo) (*Token, error) {
 	t := &Token{
-		ClientID: clientid,
-		Scope:    scope,
+		ClientID: authinfo.ClientId,
+		Scope:    authinfo.Scope,
+		Resource: authinfo.Resource,
 	}
 
 	var extraargs []string
+
+	redirecturi := authinfo.RedirectURI
 
 	resultchan := make(chan Result)
 	var interceptlogs bool
@@ -69,17 +73,45 @@ func AcquireToken(authority, redirecturi, clientid, scope string) (*Token, error
 		resultchan = srv.ResultCh
 	}
 
-	c, err := public.New(clientid, public.WithAuthority(authority))
+	// c, err := public.New(authinfo.ClientId, public.WithAuthority(authority))
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// Get the URL for interactive login
+	// ctx := context.Background()
+	// loginurl, err := c.CreateAuthCodeURL(ctx, authinfo.ClientId, redirecturi, []string{authinfo.Scope})
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	if authinfo.Resource != "" {
+		// Downgrade v2.0 to old if asking for a resource and not scope (v2.0 doesn't support that) FUGLY
+		authority = strings.Replace(authority, "/v2.0/", "/", 1)
+	}
+
+	baseURL, err := url.Parse(authority)
 	if err != nil {
 		return nil, err
 	}
 
-	// Get the URL for interactive login
-	ctx := context.Background()
-	loginurl, err := c.CreateAuthCodeURL(ctx, clientid, redirecturi, []string{scope})
-	if err != nil {
-		return nil, err
+	v := url.Values{}
+	v.Set("client_id", authinfo.ClientId)
+	v.Set("redirect_uri", redirecturi)
+	if authinfo.Scope != "" {
+		v.Set("scope", authinfo.Scope)
 	}
+	if authinfo.Resource != "" {
+		v.Set("resource", authinfo.Resource)
+	}
+	v.Set("prompt", "login")
+	v.Set("response_type", "code")
+	req_id, _ := uuid.NewV4()
+	v.Set("request_id", req_id.String())
+	v.Set("haschrome", "1")
+
+	baseURL.RawQuery = v.Encode()
+	loginurl := baseURL.String()
 
 	// Launch browser
 	l, err := lorca.New("", "", 400, 600, extraargs...)
@@ -118,16 +150,15 @@ console.log = function(){
 				// if strings.Contains(title, "code=") {
 				// 	fmt.Println(title)
 				// }
-				log := l.Eval("if (console.logs.length ==1) console.logs[0]").String()
+				log := l.Eval("if (console.logs.length>=1) console.logs.pop()").String()
 				if log != "" {
 					fmt.Println(log)
-					l.Eval("console.logs = []")
 				}
 
-				// title := val.String()
-				// if strings.Contains(title, "code=") {
-				// 	fmt.Println(title)
-				// }
+				ref := l.Eval("document.location.href").String()
+				if strings.Contains(ref, "urn") {
+					fmt.Println(ref)
+				}
 
 				if redirecturi != "" {
 					currenturl := l.Eval("document.URL").String()

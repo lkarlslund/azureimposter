@@ -9,35 +9,13 @@ import (
 
 func main() {
 	wkc := flag.String("wkc", "Graph", "Use a predefined well known client name")
-
 	authority := flag.String("authority", "https://login.windows.net/common/", "OAuth authority request URL")
-	clientIDoverride := flag.String("clientID", "", "clientID to use")
-	redirectURIorverride := flag.String("redirectURI", "", "redirectURI to use")
-	scopeOverride := flag.String("scopes", "", "scope to request")
 
-	pretender := azureimposter.WellKnownClients[*wkc]
-
-	clientID := pretender.ClientId
-	redirectURI := pretender.RedirectURI
-	scope := pretender.Scope
-
-	if *clientIDoverride != "" {
-		clientID = *clientIDoverride
-	}
-
-	if *redirectURIorverride != "" {
-		redirectURI = *redirectURIorverride
-	}
-
-	if *scopeOverride != "" {
-		scope = *scopeOverride
-	}
+	authinfo := azureimposter.WellKnownClients[*wkc]
 
 	token, err := azureimposter.AcquireToken(
 		*authority,
-		redirectURI,
-		clientID,
-		scope,
+		authinfo,
 	)
 
 	if err != nil {

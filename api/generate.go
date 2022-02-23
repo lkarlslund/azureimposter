@@ -11,14 +11,41 @@ import (
 	"github.com/getkin/kin-openapi/openapi3"
 )
 
+type generatorinfo struct {
+	version  string
+	typename string
+	filename string
+}
+
 func main() {
+	versions := []generatorinfo{
+		{
+			version:  "1.0",
+			typename: "msgraph",
+			filename: "msgraph/types.go",
+		},
+		{
+			version:  "beta",
+			typename: "msgraphbeta",
+			filename: "msgraphbeta/types.go",
+		},
+	}
+
+	for _, version := range versions {
+		err := generatetypes(version.version, version.typename, version.filename)
+		if err != nil {
+			fmt.Printf("Error generating types for version %v: %v", version, err)
+		}
+	}
+}
+
+func generatetypes(version, typename, filename string) error {
 	// set up codegen
 	opts := codegen.Options{
 		GenerateTypes: true,
 	}
 
-	// v1.0
-	resp, err := http.Get("https://graphexplorerapi.azurewebsites.net/openapi?operationIds=*&openApiVersion=3&graphVersion=beta&format=json")
+	resp, err := http.Get("https://graphexplorerapi.azurewebsites.net/openapi?operationIds=*&openApiVersion=3&graphVersion=" + version + "&format=json")
 	if err != nil {
 		// handle error
 		fmt.Printf("%s", err)
@@ -26,40 +53,15 @@ func main() {
 	data, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
 		// handle error
-		fmt.Printf("%s", err)
+		return err
 	}
 
 	loader := openapi3.NewLoader()
 	swagger, err := loader.LoadFromData([]byte(prefixup(string(data))))
 
-	code, err := codegen.Generate(swagger, "msgraph", opts)
-	err = ioutil.WriteFile("msgraph/types.go", []byte(postfixup(code)), 0644)
-	if err != nil {
-		// handle error
-		fmt.Printf("%s", err)
-	}
-
-	// beta
-	resp, err = http.Get("https://graphexplorerapi.azurewebsites.net/openapi?operationIds=*&openApiVersion=3&graphVersion=beta&format=json")
-	if err != nil {
-		// handle error
-		fmt.Printf("%s", err)
-	}
-	data, err = ioutil.ReadAll(resp.Body)
-	if err != nil {
-		// handle error
-		fmt.Printf("%s", err)
-	}
-
-	loader = openapi3.NewLoader()
-	swagger, err = loader.LoadFromData([]byte(prefixup(string(data))))
-
-	code, err = codegen.Generate(swagger, "msgraphbeta", opts)
-	err = ioutil.WriteFile("msgraphbeta/types.go", []byte(postfixup(code)), 0644)
-	if err != nil {
-		// handle error
-		fmt.Printf("%s", err)
-	}
+	code, err := codegen.Generate(swagger, typename, opts)
+	err = ioutil.WriteFile(filename, []byte(postfixup(code)), 0644)
+	return err
 }
 
 var regexpFixup = regexp.MustCompile(`(?m)"(any|one)Of": \[\n\s+{\n\s+"\$ref": "([^"]+)"\n\s+}\n\s+\]`)

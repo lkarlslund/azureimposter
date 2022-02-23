@@ -40,9 +40,7 @@ func main() {
 
 	token, err := azureimposter.AcquireToken(
 		*authority,
-		graphinfo.RedirectURI,
-		graphinfo.ClientId,
-		"https://graph.microsoft.com//.default",
+		graphinfo,
 	)
 
 	if err != nil {
